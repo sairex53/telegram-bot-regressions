@@ -1,0 +1,64 @@
+diff --git a/aiogram_tool/tools/callback_data/filter.py b/aiogram_tool/tools/callback_data/filter.py
+index 00d096c..0e8e648 100644
+--- a/aiogram_tool/tools/callback_data/filter.py
++++ b/aiogram_tool/tools/callback_data/filter.py
+@@ -20,9 +20,14 @@ class _UniqueIDCallbackData(CallbackData, prefix=UNIQUE_PREFIX):
+ 
+     @classmethod
+     def build(cls, callback_data: type[CallbackData]) -> Self:
+-        separators_len = len(cls.__separator__) * len(cls.model_fields)
++        separators_len = len(cls.__separator__.encode("utf-8")) * len(cls.model_fields)
+         unique_id_len = (
+-            64 - (len(UNIQUE_PREFIX) + len(callback_data.__prefix__) + separators_len)
++            64
++            - (
++                len(UNIQUE_PREFIX.encode("utf-8"))
++                + len(callback_data.__prefix__.encode("utf-8"))
++                + separators_len
++            )
+         ) // 2
+ 
+         if unique_id_len < 6:
+diff --git a/tests/callback_data/test_unique_id.py b/tests/callback_data/test_unique_id.py
+index 0255395..7c83e4a 100644
+--- a/tests/callback_data/test_unique_id.py
++++ b/tests/callback_data/test_unique_id.py
+@@ -1,6 +1,13 @@
+ import pytest
+ 
+-from aiogram_tool.tools.callback_data.filter import LongCallbackData
++from aiogram_tool.storage.impl.memory import MemoryStorage
++from aiogram_tool.tools.callback_data.filter import (
++    LongCallbackData,
++    LongCallbackQueryFilter,
++    _UniqueIDCallbackData,
++)
++
++from .conftest import CallbackQueryFactoryType
+ 
+ 
+ async def test_unique_id_data_error() -> None:
+@@ -11,3 +18,23 @@ async def test_unique_id_data_error() -> None:
+     with pytest.raises(ValueError):
+         # Error is too long prefix
+         await Data(attr="important_data").pack_long()
++
++
++async def test_unicode_prefix_unique_id_respects_telegram_byte_limit(
++    callback_query_factory: CallbackQueryFactoryType,
++) -> None:
++    class Data(LongCallbackData, prefix="🐍" * 10):
++        _storage = MemoryStorage()
++
++        attr: str
++
++    unique_id = _UniqueIDCallbackData.build(Data).pack()
++    assert len(unique_id.encode("utf-8")) <= 64
++
++    packed = await Data(attr="important_data" * 10).pack_long()
++    assert len(packed.encode("utf-8")) <= 64
++
++    result = await LongCallbackQueryFilter(callback_data=Data)(
++        callback_query_factory(packed)
++    )
++    assert result["callback_data"] == Data(attr="important_data" * 10)
