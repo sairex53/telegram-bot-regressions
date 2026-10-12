@@ -1,0 +1,17 @@
+diff --git a/src/aiogram_dialog_yaml/delivery/queue.py b/src/aiogram_dialog_yaml/delivery/queue.py
+index 58fcba0..46913b6 100644
+--- a/src/aiogram_dialog_yaml/delivery/queue.py
++++ b/src/aiogram_dialog_yaml/delivery/queue.py
+@@ -176,6 +176,9 @@ class MessageQueue:
+         if self._on_error is None:
+             log.warning("send failed for %s(chat_id=%s): %s", task.method, task.chat_id, exc)
+             return
+-        result = self._on_error(task, exc)
+-        if inspect.isawaitable(result):
+-            await result
++        try:
++            result = self._on_error(task, exc)
++            if inspect.isawaitable(result):
++                await result
++        except Exception:
++            log.exception("on_error callback failed for %s(chat_id=%s)", task.method, task.chat_id)
